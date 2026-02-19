@@ -24,7 +24,11 @@ from spinifex.ionospheric.ionex_manipulation import interpolate_ionex, IonexData
 from spinifex.ionospheric.iri_density import get_profile
 
 from spinifex_gnss.parse_gnss import GNSSData
-from spinifex_gnss.gnss_geometry import get_sat_pos, get_stat_sat_ipp, _convert_ipp_lonlatr_to_xyz
+from spinifex_gnss.gnss_geometry import (
+    get_sat_pos,
+    get_stat_sat_ipp,
+    _convert_ipp_lonlatr_to_xyz,
+)
 from spinifex_gnss.gnss_stations import gnss_pos_dict
 from spinifex_gnss.tec_core import getphase_tec, get_transmission_time, _get_cycle_slips
 from spinifex_gnss.config import (
@@ -43,14 +47,10 @@ from spinifex_gnss.config import (
 # ============================================================================
 
 
-
-
 def _get_distance_km(loc1: u.Quantity, loc2: u.Quantity) -> np.ndarray:
     """Calculate distance between two sets of locations in km."""
 
-
     return np.linalg.norm(loc1.to(u.km).value - loc2.to(u.km).value, axis=-1)
-
 
 
 def _get_gim_phase_corrected(
@@ -89,7 +89,7 @@ def _get_gim_phase_corrected(
     default_options = tec_data.IonexOptions(remove_midnight_jumps=True)
     h_idx = np.argmin(
         np.abs(
-            ipp_sat_stat.loc[0].height.to(u.km).value
+            ipp_sat_stat.height[0].to(u.km).value
             - default_options.height.to(u.km).value
         )
     )
@@ -122,13 +122,12 @@ def _get_gim_phase_corrected(
         if np.intersect1d(seg_idx, extended_timeselect).size == 0:
             continue
 
-        ipp = ipp_sat_stat.loc[:, h_idx][seg_idx]
         elevation = ipp_sat_stat.altaz.alt.deg[seg_idx]
 
         gim_tec = interpolate_ionex(
             ionex,
-            ipp.lon.deg,
-            ipp.lat.deg,
+            ipp_sat_stat.lon[:, h_idx][seg_idx].to(u.deg).value,
+            ipp_sat_stat.lat[:, h_idx][seg_idx].to(u.deg).value,
             ipp_sat_stat.times[seg_idx],
             apply_earth_rotation=default_options.apply_earth_rotation,
         )
@@ -278,7 +277,7 @@ def _get_distance_ipp_time_averaged(
         [VTEC, error, dlon, dlat, time_weight (optional)]
     """
     Ntimes_target = ipp_target.times.shape[0]
-    Nheights = ipp_target.loc[0].shape[0]
+    Nheights = ipp_target.lon[0].shape[0]
     Nprns = stec_values.shape[0]
 
     result = []
@@ -317,9 +316,8 @@ def _get_distance_ipp_time_averaged(
 
         height_data = []
 
-        loc1_list =  [_convert_ipp_lonlatr_to_xyz(ipp) for ipp in ipp_sat_stat]
+        loc1_list = [_convert_ipp_lonlatr_to_xyz(ipp) for ipp in ipp_sat_stat]
         loc2 = _convert_ipp_lonlatr_to_xyz(ipp_target)
-
 
         # Process each height
         for hidx in range(Nheights):
@@ -327,9 +325,7 @@ def _get_distance_ipp_time_averaged(
             dist_select_all = np.array(
                 [
                     [
-                        _get_distance_km(
-                            loc1[slot_idx, hidx], loc2[target_idx, hidx]
-                        )
+                        _get_distance_km(loc1[slot_idx, hidx], loc2[target_idx, hidx])
                         < DISTANCE_KM_CUT
                         for slot_idx in slot_indices
                     ]
@@ -369,13 +365,13 @@ def _get_distance_ipp_time_averaged(
                         profiles[target_idx, hidx] * stec_errors[prn_idx, slot_idx]
                     )
 
-                    dlon = np.cos(ipp_target.loc[target_idx, hidx].lat.rad) * (
-                        ipp_sat_stat[prn_idx].loc[slot_idx, hidx].lon.deg
-                        - ipp_target.loc[target_idx, hidx].lon.deg
+                    dlon = np.cos(ipp_target.lat[target_idx, hidx].to(u.rad).value) * (
+                        ipp_sat_stat[prn_idx].lon[slot_idx, hidx].to(u.deg).value
+                        - ipp_target.lon[target_idx, hidx].to(u.deg).value
                     )
                     dlat = (
-                        ipp_sat_stat[prn_idx].loc[slot_idx, hidx].lat.deg
-                        - ipp_target.loc[target_idx, hidx].lat.deg
+                        ipp_sat_stat[prn_idx].lat[slot_idx, hidx].to(u.deg).value
+                        - ipp_target.lat[target_idx, hidx].to(u.deg).value
                     )
 
                     all_vtec.append(vtec)
@@ -425,7 +421,7 @@ def _get_distance_ipp_nearest(
 ) -> list[list[np.ndarray]]:
     """Calculate VTEC using nearest-neighbor time matching (original method)."""
     Ntimes = ipp_target.times.shape[0]
-    Nheights = ipp_target.loc[0].shape[0]
+    Nheights = ipp_target.lon[0].shape[0]
     Nprns = stec_values.shape[0]
 
     vtecs = np.full((Nprns, Ntimes, Nheights), np.nan, dtype=float)
@@ -436,11 +432,12 @@ def _get_distance_ipp_nearest(
     )
 
     el_select = np.logical_and(~np.isnan(stec_values[:, timeselect]), el_select)
-
+    loc1_list = [_convert_ipp_lonlatr_to_xyz(ipp) for ipp in ipp_sat_stat]
+    loc2 = _convert_ipp_lonlatr_to_xyz(ipp_target)
     dist_select = np.array(
         [
-            _get_distance_km(ipp.loc[timeselect], ipp_target.loc) < DISTANCE_KM_CUT
-            for ipp in ipp_sat_stat
+            _get_distance_km(loc1[timeselect], loc2) < DISTANCE_KM_CUT
+            for loc1  in loc1_list
         ]
     )
 
@@ -659,7 +656,7 @@ def get_gnss_station_density(
                     satpos=sat_pos,
                     gnsspos=gnss_pos_dict[gnss_data.station],
                     times=transmission_time,
-                    height_array=ipp_target.loc[0].height,
+                    height_array=ipp_target.height[0],
                 )
             )
 
@@ -679,7 +676,7 @@ def get_gnss_station_density(
 
     if len(stec_values) == 0:
         Ntimes = ipp_target.times.shape[0]
-        Nheights = ipp_target.loc[0].shape[0]
+        Nheights = ipp_target.lon[0].shape[0]
         return [[np.array([]) for _ in range(Nheights)] for _ in range(Ntimes)]
 
     stec_values = np.array(stec_values)
@@ -791,7 +788,7 @@ def get_ipp_density(
     profiles = get_profile(ipp_target)
 
     Ntimes = ipp_target.times.shape[0]
-    Nheights = ipp_target.loc.shape[1]
+    Nheights = ipp_target.lon.shape[1]
 
     all_data = [[[] for _ in range(Nheights)] for _ in range(Ntimes)]
 
