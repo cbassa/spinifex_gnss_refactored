@@ -114,7 +114,7 @@ def select_gnss_stations(
     ipp_earth = IPP(
         lon=ipp_location.lon[:, hidx],
         lat=ipp_location.lat[:, hidx],
-        height=np.zeros_like(ipp_location.lon[:, hidx]) * u.m,
+        height=np.zeros_like(ipp_location.lon[:, hidx].value) * u.m,
         times=None,  # Not needed for distance calculation
         los=None,
         airmass=None,
