@@ -16,6 +16,18 @@ from typing import Literal
 from spinifex_gnss.parse_sp3 import parse_sp3, concatenate_sp3_files, SP3Data
 
 
+def _convert_ipp_lonlatr_to_xyz(ipp: IPP) -> np.ndarray[float]:
+    r_m = ipp.height.to(u.m).value
+    lat_rad = ipp.lat.to(u.rad).value
+    lon_rad = ipp.lon.to(u.rad).value
+
+    x = r_m * np.cos(lat_rad) * np.cos(lon_rad)
+    y = r_m * np.cos(lat_rad) * np.sin(lon_rad)
+    z = r_m * np.sin(lat_rad)
+    return np.concatenate((x[...,np.newaxis],y[...,np.newaxis],z[...,np.newaxis]), axis=-1) * u.m
+
+
+
 def get_sp3_data(sp3_files: list[Path]) -> SP3Data:
     """
     Load and combine SP3 satellite orbit files.
@@ -198,14 +210,10 @@ def get_azel_sat(satpos: EarthLocation, gnsspos: EarthLocation, times: Time) -> 
     >>> print(f"Azimuth: {azel.az.deg:.1f}°, Elevation: {azel.alt.deg:.1f}°")
     """
     # Convert satellite position to ITRS
-    itrs_geo = satpos.itrs
-    
-    # Calculate topocentric (relative to receiver) position
-    topo_itrs_repr = itrs_geo.cartesian.without_differentials() - gnsspos.itrs.cartesian
-    itrs_topo = ITRS(topo_itrs_repr, obstime=times, location=gnsspos)
-    
-    # Transform to AltAz frame
-    aa = itrs_topo.transform_to(AltAz(obstime=times, location=gnsspos))
+    sat_itrs = satpos.get_itrs(times)
+    # Transform to topocentric AltAz 
+    aa = sat_itrs.transform_to(AltAz(obstime=times, location=gnsspos))
+
     
     return aa
 
