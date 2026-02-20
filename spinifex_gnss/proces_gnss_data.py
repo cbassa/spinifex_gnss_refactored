@@ -18,7 +18,7 @@ from astropy.coordinates import EarthLocation
 from concurrent.futures import as_completed, ProcessPoolExecutor
 import gc
 
-from spinifex.geometry import IPP
+from spinifex.geometry import IPP, R_EARTH_MEAN
 from spinifex.ionospheric import tec_data
 from spinifex.ionospheric.ionex_manipulation import interpolate_ionex, IonexData
 from spinifex.ionospheric.iri_density import get_profile
@@ -89,7 +89,7 @@ def _get_gim_phase_corrected(
     default_options = tec_data.IonexOptions(remove_midnight_jumps=True)
     h_idx = np.argmin(
         np.abs(
-            ipp_sat_stat.height[0].to(u.km).value
+            (ipp_sat_stat.height[0] - R_EARTH_MEAN).to(u.km).value
             - default_options.height.to(u.km).value
         )
     )
@@ -437,7 +437,7 @@ def _get_distance_ipp_nearest(
     dist_select = np.array(
         [
             _get_distance_km(loc1[timeselect], loc2) < DISTANCE_KM_CUT
-            for loc1  in loc1_list
+            for loc1 in loc1_list
         ]
     )
 
@@ -588,7 +588,9 @@ def get_interpolated_tec(
                 print(f"⚠ Interpolation failed at time={timeidx}, height={hidx}: {e}")
                 continue
             except Exception as e:
-                print(f"❌ Unexpected error at time={timeidx}, height={hidx}: {type(e).__name__}: {e}")
+                print(
+                    f"❌ Unexpected error at time={timeidx}, height={hidx}: {type(e).__name__}: {e}"
+                )
                 continue
     return fitted_density
 
@@ -660,7 +662,7 @@ def get_gnss_station_density(
                     satpos=sat_pos,
                     gnsspos=gnss_pos_dict[gnss_data.station],
                     times=transmission_time,
-                    height_array=ipp_target.height[0],
+                    height_array=ipp_target.height[0] - R_EARTH_MEAN,
                 )
             )
 
