@@ -451,7 +451,7 @@ def _get_distance_ipp_nearest(
 
     dlons = np.array(
         [
-            np.cos(ipp_target.lon.lat.to(u.rad).value)
+            np.cos(ipp_target.lat.to(u.rad).value)
             * (ipp.lon[timeselect].to(u.deg).value - ipp_target.lon.to(u.deg).value)
             for ipp in ipp_sat_stat
         ]
@@ -521,6 +521,7 @@ def get_interpolated_tec(
     for timeidx, input_time in enumerate(input_data):
         for hidx, measurements in enumerate(input_time):
             if not measurements.shape or measurements.shape[0] < 2:
+                print(f"DEBUG: No measurements at time {timeidx}, height {hidx}")
                 continue
 
             vtec = measurements[:, 0]
@@ -583,9 +584,12 @@ def get_interpolated_tec(
                     np.linalg.inv(AwT @ A) @ (AwT @ vtec[dist_select][:, np.newaxis])
                 ).squeeze()
                 fitted_density[timeidx, hidx] = par[0]
-            except:
+            except np.linalg.LinAlgError as e:
+                print(f"⚠ Interpolation failed at time={timeidx}, height={hidx}: {e}")
                 continue
-
+            except Exception as e:
+                print(f"❌ Unexpected error at time={timeidx}, height={hidx}: {type(e).__name__}: {e}")
+                continue
     return fitted_density
 
 
