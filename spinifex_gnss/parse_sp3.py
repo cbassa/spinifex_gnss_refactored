@@ -516,7 +516,8 @@ def concatenate_sp3_files(sp3_files: list[Path]) -> SP3Data:
     
     # Concatenate times
     all_times = Time(np.concatenate([data.times.mjd for data in parsed_files]), format='mjd')
-    
+    _, unique_indices = np.unique(all_times.mjd, return_index=True)
+    unique_indices = np.sort(unique_indices)  # Keep original order    
     # Get union of all satellite IDs
     all_sat_ids = set()
     for data in parsed_files:
@@ -540,12 +541,15 @@ def concatenate_sp3_files(sp3_files: list[Path]) -> SP3Data:
                 sat_positions.append(np.full((n_epochs, 3), np.nan))
                 sat_clocks.append(np.full(n_epochs, np.nan))
         
-        combined_positions[sat_id] = np.concatenate(sat_positions, axis=0)
-        combined_clocks[sat_id] = np.concatenate(sat_clocks)
-    
+        combined_positions[sat_id] = np.concatenate(sat_positions, axis=0)[unique_indices]
+        combined_clocks[sat_id] = np.concatenate(sat_clocks)[unique_indices]
+
+
+
+
     return SP3Data(
         header=header,
-        times=all_times,
+        times=all_times[unique_indices],
         positions=combined_positions,
         clock_corrections=combined_clocks,
         position_stds=None,
