@@ -20,6 +20,7 @@ from pathlib import Path
 from bs4 import BeautifulSoup
 import requests
 
+import xml.etree.ElementTree as ET
 
 def get_gps_week(date: datetime) -> tuple[int, int]:
     """
@@ -326,9 +327,13 @@ def download_satpos_files(
     return _download_satpos_files(date, url, datapath)
 
 
+
+
 def check_url(url_list: list[str]) -> set[str]:
     """
     Check URLs and parse directory listings for available files.
+    
+    Handles both regular HTTP directory listings and S3 buckets.
 
     Parameters
     ----------
@@ -341,21 +346,97 @@ def check_url(url_list: list[str]) -> set[str]:
         Set of available file URLs
     """
     files = set()
+    
     for url in url_list:
         try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-
-            soup = BeautifulSoup(response.text, "html.parser")
-
-            for link in soup.find_all("a"):
-                href = link.get("href")
-                if href and not href.startswith(("?", "/", "http")):
-                    files.add(f"{url}{href}")
+            # Check if this is an S3 bucket (Australian GA)
+            if 's3.amazonaws.com' in url or 's3-' in url:
+                files.update(_check_s3_bucket(url))
+            else:
+                # Regular HTTP directory listing
+                files.update(_check_http_directory(url))
         except Exception as e:
             print(f"Error parsing {url}: {e}")
             continue
 
+    return files
+
+
+def _check_http_directory(url: str) -> set[str]:
+    """
+    Parse a regular HTTP directory listing (Apache/nginx style).
+    
+    Parameters
+    ----------
+    url : str
+        Directory URL
+        
+    Returns
+    -------
+    set[str]
+        Set of file URLs found
+    """
+    files = set()
+    
+    response = requests.get(url, timeout=30)
+    response.raise_for_status()
+    
+    soup = BeautifulSoup(response.text, "html.parser")
+    
+    for link in soup.find_all("a"):
+        href = link.get("href")
+        if href and not href.startswith(("?", "/", "http")):
+            files.add(f"{url}{href}")
+    
+    return files
+
+
+def _check_s3_bucket(url: str) -> set[str]:
+    """
+    Parse an S3 bucket using the S3 ListObjects API.
+    
+    Parameters
+    ----------
+    url : str
+        S3 URL (e.g., https://bucket.s3.amazonaws.com/index.html#prefix/path/)
+        
+    Returns
+    -------
+    set[str]
+        Set of file URLs found (matching input URL format)
+    """
+    files = set()
+    
+    # Extract bucket name (e.g., ga-gnss-data-rinex-v1)
+    bucket_name = url.split('/')[2].split('.')[0]
+    
+    # Check if URL uses index.html# format
+    has_index_html = 'index.html#' in url
+    
+    # Extract prefix
+    if 'prefix=' in url:
+        prefix = url.split('prefix=')[1].split('&')[0]
+    elif '#' in url:
+        prefix = url.split('#')[1]
+    else:
+        return files
+    
+    # Call S3 API
+    s3_url = f"https://{bucket_name}.s3.amazonaws.com/?list-type=2&prefix={prefix}"
+    
+    # Use urllib.request like the working code
+    import urllib.request
+    with urllib.request.urlopen(s3_url, timeout=30) as response:
+        xml_content = response.read().decode("utf-8")
+    
+    # Parse XML and extract files
+    root = ET.fromstring(xml_content)
+    
+    # Search for any element with tag ending in 'Key' (handles namespaces)
+    for elem in root.iter():
+        if elem.tag.endswith('Key') and elem.text:
+            file_url = f"https://{bucket_name}.s3.amazonaws.com/{elem.text}"
+            files.add(file_url)
     return files
 
 
@@ -582,9 +663,8 @@ async def download_rinex_coro(
         "https://cddis.nasa.gov/archive/gnss/data/daily/",
         "https://www.epncb.oma.be/pub/obs/",
         # Remove ring, firewall..."https://webring.gm.ingv.it:44324/rinex/RING/",
-        "https://ga-gnss-data-rinex-v1.s3.amazonaws.com/index.html#public/daily/",
+        "https://ga-gnss-data-rinex-v1.s3.amazonaws.com/index.html#public/daily",
     ]
-
     # Build server URLs for both RINEX3 and RINEX2
     rinex3_urls = [
         f"{server_list[0]}/{year}/{doy:03d}/{yy}d/",
@@ -618,7 +698,7 @@ async def download_rinex_coro(
         rinex3_filenames = _build_rinex3_filenames(station, year, doy)
         for rinex3_filename in rinex3_filenames:
             for url in rinex3_urls:
-                full_url = f"{url}{rinex3_filename}"
+                full_url = f"{url}{rinex3_filename}".replace("index.html#","")
                 if full_url in rinex3_files:
                     urls.append((full_url, "RINEX3"))
                     found = True
@@ -632,7 +712,7 @@ async def download_rinex_coro(
             rinex2_filenames = _build_rinex2_filenames(station, year, doy)
             for rinex2_filename in rinex2_filenames:
                 for url in rinex2_urls:
-                    full_url = f"{url}{rinex2_filename}"
+                    full_url = f"{url}{rinex2_filename}".replace("index.html#","")
                     if full_url in rinex2_files:
                         urls.append((full_url, "RINEX2"))
                         found = True
