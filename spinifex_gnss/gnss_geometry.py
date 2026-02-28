@@ -268,7 +268,7 @@ def get_stat_sat_ipp(
     # Get positions in ITRS
 
     los_itrs = ITRS(
-        (satpos.itrs.cartesian.xyz.value - gnsspos.itrs.cartesian.xyz.value) * u.m,
+        (satpos.itrs.cartesian.xyz.value.T - gnsspos.itrs.cartesian.xyz.value).T * u.m,
         obstime=times.utc,
         representation_type='cartesian'
     )
