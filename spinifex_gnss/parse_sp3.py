@@ -338,15 +338,21 @@ def parse_sp3(filepath: Path, include_stds: bool = False) -> SP3Data:
         with gzip.open(filepath, "rt", encoding="utf-8") as f:
             lines = f.readlines()
     elif filepath.suffix == ".Z":
-        # Unix compress format - decompress first
-        import subprocess
-
-        result = subprocess.run(
-            ["uncompress", "-c", str(filepath)], capture_output=True, text=True
-        )
-        if result.returncode != 0:
-            raise ValueError(f"Failed to decompress .Z file: {result.stderr}")
-        lines = result.stdout.split("\n")
+        # Unix compress format (.Z) - use Python decompressor
+        try:
+            import unlzw3
+        except ImportError:
+                raise ImportError(
+                    "unlzw3 library required for .Z files. Install with: "
+                    "pip install unlzw3 --break-system-packages"
+                )
+            
+        # Read and decompress
+        with open(filepath, 'rb') as f:
+            compressed_data = f.read()
+        
+        decompressed_data = unlzw3.unlzw(compressed_data)
+        lines = decompressed_data.decode('utf-8').split('\n') 
     else:
         with open(filepath, "r", encoding="utf-8") as f:
             lines = f.readlines()
