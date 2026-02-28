@@ -123,8 +123,8 @@ def interpolate_satellite(
         raise ValueError(f"No valid position data for satellite {satellite_id}")
 
     # Time arrays for interpolation
-    x_values = sp3_data.times[valid_mask].mjd
-    target_x = time_target.mjd
+    x_values = sp3_data.times[valid_mask].utc.mjd
+    target_x = time_target.utc.mjd
 
     # Extract valid positions
     valid_positions = sat_positions[valid_mask]
@@ -266,18 +266,18 @@ def get_stat_sat_ipp(
     # Calculate pierce points at specified heights
     # return get_ipp_from_altaz(gnsspos, azel, height_array)
     # Get positions in ITRS
-    sat_itrs = satpos.get_itrs(times)
-    rec_itrs = gnsspos.get_itrs(times)
+    sat_itrs = satpos.get_itrs(times.utc)
+    rec_itrs = gnsspos.get_itrs(times.utc)
 
     # Calculate line-of-sight in ITRS (simple subtraction!)
     los_itrs = ITRS(
         sat_itrs.cartesian - rec_itrs.cartesian,
-        obstime=times,
+        obstime=times.utc,
         representation_type="cartesian",
     )
 
     # Calculate pierce points (AltAz computed internally)
-    return get_ipp_from_itrs(gnsspos, times, los_itrs, height_array)
+    return get_ipp_from_itrs(gnsspos, times.utc, los_itrs, height_array)
 
 
 def filter_by_elevation(azel: AltAz, min_elevation: float = 20.0) -> np.ndarray:

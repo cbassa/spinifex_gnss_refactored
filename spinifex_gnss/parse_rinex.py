@@ -3,7 +3,8 @@ from pathlib import Path
 import numpy as np
 from typing import NamedTuple, Any
 from astropy.time import Time
-
+import astropy.units as u
+from spinifex_gnss.config import GPS_TO_TAI_SECONDS
 
 class RinexHeader(NamedTuple):
     version: str
@@ -111,8 +112,8 @@ def get_rinex_data(fname: Path) -> RinexData:
                 sec = float(parts[6])
                 cur_time = Time(
                     f"{yr}-{mo}-{dy}T{hr}:{mi}:{sec}"
-                )  # note: this is gps time (leap seconds!!)
-                all_times.append(cur_time.mjd)
+                , scale = 'tai') + GPS_TO_TAI_SECONDS * u.s # note: this is gps time (leap seconds!!)
+                all_times.append(cur_time)
                 no_cur_time = False
                 continue
             except:
@@ -136,16 +137,16 @@ def get_rinex_data(fname: Path) -> RinexData:
         else:
             data[sat_id]["time"].append(cur_time)
             data[sat_id]["data"].append(obs_vals)
-    all_times = np.array(all_times)
+    all_times = Time(all_times)
     newdata = {}
     for prn, prndata in data.items():
         alldata = np.empty((len(all_times), len(prndata["data"][0])))
         alldata.fill(np.nan)
         for tm, dt in zip(prndata["time"], prndata["data"]):
-            tm_idx = np.argmin(np.abs(all_times - tm.mjd))
+            tm_idx = np.argmin(np.abs(all_times.utc.mjd - tm.utc.mjd))
             alldata[tm_idx] = dt
         newdata[prn] = alldata
-    return RinexData(header=header, times=Time(all_times, format="mjd"), data=newdata)
+    return RinexData(header=header, times=all_times, data=newdata)
 
 
 # TODO: add RNX2 parser

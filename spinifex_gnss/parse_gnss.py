@@ -329,7 +329,7 @@ def get_gnss_data(gnss_file: list[Path], station: str) -> list[GNSSData]:
                         np.concatenate(
                             (rinex_data.times.mjd, rinex_data_next_day.times.mjd)
                         ),
-                        format="mjd",
+                        format="mjd", scale = rinex_data.times.scale
                     ),
                     constellation=constellation,
                     tec_coefficients=tec_coefficients,

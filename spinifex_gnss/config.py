@@ -111,13 +111,9 @@ MIN_DISTANCE_SELECT = 1500 * u.km
 # Time Constants
 # ============================================================================
 
-# GPS time to UTC correction (in days)
-# GPS time has been 18 seconds ahead of UTC since 2017-01-01
-# This value is used for time conversions throughout the code
-GPS_TO_UTC_CORRECTION_DAYS = 18.0 / (24.0 * 3600.0)
-
-# Note: This is a simplification. The actual GPS-UTC offset changes with
-# leap seconds. For precise work, use proper time conversion libraries.
+# GPS time to TAI correction in seconds
+# needed because astropy.time does not have a gps scale 
+GPS_TO_TAI_SECONDS = 19
 
 # ============================================================================
 # GNSS Frequency Definitions (in Hz)

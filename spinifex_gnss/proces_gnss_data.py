@@ -36,11 +36,9 @@ from spinifex_gnss.config import (
     NDIST_POINTS,
     ELEVATION_CUT,
     INTERPOLATION_ORDER,
-    GPS_TO_UTC_CORRECTION_DAYS,
     MAX_WORKERS_DENSITY,
     MIN_OBSERVATIONS_PER_SEGMENT,
 )
-
 
 # ============================================================================
 # Helper Functions
@@ -691,13 +689,8 @@ def get_gnss_station_density(
     # Choose processing method based on n_time_slots
     if n_time_slots == 1:
         # Nearest-neighbor (fast, original method)
-        gpstime_correction = GPS_TO_UTC_CORRECTION_DAYS
         timeselect = np.argmin(
-            np.abs(
-                ipp_target.times.mjd
-                - gnss_data.times.mjd[:, np.newaxis]
-                + gpstime_correction
-            ),
+            np.abs(ipp_target.times.utc.mjd - gnss_data.times.utc.mjd[:, np.newaxis]),
             axis=0,
         )
 
@@ -711,10 +704,9 @@ def get_gnss_station_density(
         )
     else:
         # Time averaging (better coverage, still fast with vectorization)
-        gpstime_correction = GPS_TO_UTC_CORRECTION_DAYS
         time_mapping, time_weights = _build_time_mapping_vectorized(
-            ipp_target.times.mjd + gpstime_correction,
-            gnss_data.times.mjd,
+            ipp_target.times.utc.mjd,
+            gnss_data.times.utc.mjd,
             n_slots=n_time_slots,
             max_diff_min=max_time_diff_min,
         )
