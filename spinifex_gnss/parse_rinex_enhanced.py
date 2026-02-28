@@ -55,9 +55,14 @@ def _read_rinex2_header(raw_rinex_lines: list[str]) -> tuple[RinexHeader, int]:
                 # Assign same types to all common constellations
                 for constellation in ["G", "R", "E", "C", "J", "S", "I"]:
                     obs_map[constellation] = obs_types
-
-            return RinexHeader(version=version, datatypes=obs_map), line_number + 1
-
+            return (
+                RinexHeader(
+                    version=version,
+                    datatypes=obs_map,
+                    glonass_channels={},  # RINEX2 doesn't have GLONASS channel info
+                ),
+                line_number + 1,
+            )
         if "RINEX VERSION / TYPE" in label:
             version = line[:20].strip()
 
