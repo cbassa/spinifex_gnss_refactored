@@ -76,7 +76,7 @@ from spinifex_gnss.config import (
     FREQ,
     GNSS_OBS_PRIORITY,
     get_tec_coefficient,
-    GPS_TO_UTC_CORRECTION_DAYS,
+    GPS_TO_TAI_SECONDS,
 )
 
 __all__ = [
