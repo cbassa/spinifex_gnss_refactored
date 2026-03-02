@@ -127,7 +127,7 @@ def _get_gim_phase_corrected(
             ipp_sat_stat.lon[:, h_idx][seg_idx].to(u.deg).value,
             ipp_sat_stat.lat[:, h_idx][seg_idx].to(u.deg).value,
             ipp_sat_stat.times[seg_idx],
-            apply_earth_rotation=default_options.apply_earth_rotation,
+            apply_earth_rotation=0,
         )
 
         high_el_mask = elevation > ELEVATION_CUT
