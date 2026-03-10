@@ -9,7 +9,7 @@ import numpy as np
 from astropy.time import Time
 import astropy.units as u
 from astropy.coordinates import EarthLocation, ITRS, AltAz
-from spinifex.geometry import IPP, get_ipp_from_altaz
+from spinifex.geometry import IPP, get_ipp_from_itrs
 from pathlib import Path
 from scipy.interpolate import CubicSpline
 from typing import Literal
@@ -263,7 +263,23 @@ def get_stat_sat_ipp(
     # Calculate azimuth and elevation
     azel = get_azel_sat(satpos, gnsspos, times)
     # Calculate pierce points (AltAz computed internally)
-    return get_ipp_from_altaz(loc=gnsspos, altaz=azel, height_array=height_array)
+        # Calculate LOS direction in ITRS (satellite - station)
+    
+    los_itrs = ITRS(
+        (satpos.to(u.m).itrs.cartesian.xyz.value.T - gnsspos.to(u.m).itrs.cartesian.xyz.value).T,
+        obstime=times,
+        representation_type='cartesian'
+    )
+    
+    # Pass both LOS and altaz to IPP calculation
+    return get_ipp_from_itrs(
+        loc=gnsspos,
+        times=times,
+        los_dir=los_itrs,
+        height_array=height_array,
+        altaz=azel  
+    )
+
 
 
 def filter_by_elevation(azel: AltAz, min_elevation: float = 20.0) -> np.ndarray:
